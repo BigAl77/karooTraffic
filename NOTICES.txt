@@ -1,0 +1,26 @@
+THIS PROJECT IS NOT OWNED, COMMISSIONED BY, OR ASSOCIATED WITH HAMMERHEAD, SRAM, OR GARMIN.
+
+---
+
+1. Original Garmin ConnectIQ mybiketraffic Project
+   KarooTraffic is a Hammerhead Karoo port inspired by and compatible with the open-source
+   Garmin ConnectIQ `mybiketraffic` project (https://github.com/kartoone/mybiketraffic),
+   licensed under the Apache License, Version 2.0.
+
+2. Karoo Extensions (`karoo-ext` library)
+   Copyright (c) 2024 SRAM LLC. All Rights Reserved.
+   Licensed under the Apache License, Version 2.0 (https://github.com/hammerheadnav/karoo-ext).
+
+3. ANT+ Android SDK (`android_antlib`)
+   Copyright (c) Garmin Canada Inc. / ANT Wireless.
+   Licensed under the Apache License, Version 2.0 (https://github.com/ant-wireless/ANT-Android-SDKs).
+
+4. Ki2 Reference Architecture
+   Portions of the Karoo extension build configuration were informed by Ki2
+   (https://github.com/valterc/ki2), Copyright (c) 2022 Valter C., licensed under the MIT License.
+
+---
+
+Trademarks:
+- "Hammerhead", "Karoo", "Karoo 2", "Karoo 3", "Karoo Extensions", and "karoo-ext" are trademarks or property of Hammerhead Navigation Inc. / SRAM LLC.
+- "Garmin", "Varia", "Connect IQ", and "ANT+" are trademarks or property of Garmin Ltd. or its subsidiaries.

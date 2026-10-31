@@ -1,0 +1,41 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
+
+private def loadLocalProperties() {
+    Properties properties = new Properties()
+    def localPropertiesFile = file('local.properties')
+    if (localPropertiesFile.exists()) {
+        properties.load(file('local.properties').newDataInputStream())
+    }
+    return properties
+}
+
+def properties = loadLocalProperties()
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenLocal()
+        google()
+        mavenCentral()
+        maven { url "https://jitpack.io" }
+        if (properties.getProperty("gpr.key", System.getenv("TOKEN") ?: "") != "") {
+            maven {
+                name = "Karoo Extensions"
+                url = uri("https://maven.pkg.github.com/hammerheadnav/karoo-ext")
+                credentials {
+                    username = properties.getProperty("gpr.user", System.getenv("USERNAME"))
+                    password = properties.getProperty("gpr.key", System.getenv("TOKEN"))
+                }
+            }
+        }
+    }
+}
+
+rootProject.name = "KarooTraffic"
+include ':app'

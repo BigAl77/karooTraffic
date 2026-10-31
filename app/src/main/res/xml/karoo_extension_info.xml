@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ExtensionInfo
+    id="karootraffic"
+    displayName="@string/app_name"
+    icon="@drawable/ic_radar"
+    scansDevices="false"
+    fitFile="true">
+
+    <DataType
+        typeId="DATATYPE_MYBIKETRAFFIC"
+        displayName="@string/datatype_mybiketraffic_name"
+        description="@string/datatype_mybiketraffic_desc"
+        graphical="true"
+        icon="@drawable/ic_radar" />
+
+</ExtensionInfo>

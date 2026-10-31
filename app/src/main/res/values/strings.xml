@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MyBikeTraffic</string>
+    <string name="datatype_mybiketraffic_name">MyBikeTraffic</string>
+    <string name="datatype_mybiketraffic_desc">Vehicle count, lap count, relative/absolute/last passing speeds, and closest radar distance.</string>
+</resources>

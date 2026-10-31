@@ -1,0 +1,20 @@
+# Built application files
+*.apk
+*.aar
+!app/libs/*.aar
+*.ap_
+*.aab
+*.dex
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+release/
+.gradle/
+build/
+local.properties
+*.log
+*.iml
+.idea/

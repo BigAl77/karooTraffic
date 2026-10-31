@@ -1,0 +1,2 @@
+-keep class com.dsi.ant.** { *; }
+-keep class io.hammerhead.karooext.** { *; }
