@@ -9,6 +9,11 @@ import org.junit.jupiter.api.Test
 class MyBikeTrafficUploaderTest {
 
     @Test
+    fun `auto upload waits 45 seconds for Hammerhead to Strava sync before uploading to MyBikeTraffic`() {
+        assertEquals(45_000L, MyBikeTrafficUploader.AUTO_UPLOAD_STRAVA_SYNC_DELAY_MS)
+    }
+
+    @Test
     fun `parseImportPageHtml extracts CSRF token, hidden fields, action, file field name, and auto-checks Terms checkbox`() {
         val sampleHtml = """
             <!DOCTYPE html>

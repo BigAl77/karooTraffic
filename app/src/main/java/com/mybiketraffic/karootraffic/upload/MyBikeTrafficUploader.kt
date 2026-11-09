@@ -63,8 +63,10 @@ data class UploadStatusSnapshot(
 
 /**
  * Handles automatic and manual uploading of Karoo `.fit` ride files to
- * https://www.mybiketraffic.com/rides/import over Wi-Fi, including automatically checking
- * the required Terms of Service checkbox on the import page.
+ * https://www.mybiketraffic.com/rides/import over Wi-Fi, including:
+ * - Waiting 45 seconds after ride completion / Wi-Fi connection so Hammerhead -> Strava sync finishes
+ *   before MyBikeTraffic.com looks up the Strava activity to update its description
+ * - Automatically checking the required Terms of Service checkbox on the import page
  */
 class MyBikeTrafficUploader(
     private val context: Context,
@@ -73,6 +75,8 @@ class MyBikeTrafficUploader(
     companion object {
         const val BASE_URL = "https://www.mybiketraffic.com"
         const val IMPORT_URL = "https://www.mybiketraffic.com/rides/import"
+        const val AUTO_UPLOAD_STRAVA_SYNC_DELAY_MS = 45_000L
+
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 10; Karoo2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
@@ -292,7 +296,6 @@ class MyBikeTrafficUploader(
                     attrs.contains("rides", ignoreCase = true)
             } ?: forms.firstOrNull()
 
-            val searchScopeHtml = targetForm?.groupValues?.get(2) ?: html
             val formAttrs = targetForm?.groupValues?.get(1) ?: ""
 
             val rawAction = extractAttribute(formAttrs, "action")
@@ -306,7 +309,6 @@ class MyBikeTrafficUploader(
             val hiddenMap = linkedMapOf<String, String>()
             var detectedFileField: String? = null
 
-            // Scan all inputs in the HTML so checkboxes outside <form> (like the ToS checkbox) are also captured
             for (inputMatch in inputRegex.findAll(html)) {
                 val attrs = inputMatch.groupValues[1]
                 val type = extractAttribute(attrs, "type")?.lowercase(Locale.US) ?: "text"
@@ -320,7 +322,6 @@ class MyBikeTrafficUploader(
                         }
                     }
                     "checkbox" -> {
-                        // Automatically mark Terms of Service / agreement checkboxes as checked
                         val key = name ?: extractAttribute(attrs, "id") ?: "tos_agreed"
                         val checkedVal = if (!value.isNullOrBlank()) value else "1"
                         hiddenMap[key] = checkedVal
@@ -423,6 +424,8 @@ class MyBikeTrafficUploader(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile
     private var pendingAutoUploadAfterRide: Boolean = false
+    @Volatile
+    private var autoUploadInFlight: Boolean = false
 
     private val _statusFlow = MutableStateFlow(
         UploadStatusSnapshot(
@@ -483,6 +486,8 @@ class MyBikeTrafficUploader(
 
     /**
      * Called by KarooTrafficManager when a ride transitions from Recording/Paused -> Idle (ride saved).
+     * Waits 45 seconds after Wi-Fi is connected so Hammerhead Cloud -> Strava sync completes first,
+     * allowing MyBikeTraffic.com to find the Strava activity and append the traffic summary description.
      */
     fun onRideCompleted() {
         if (!preferences.getSettings().autoUploadEnabled) {
@@ -491,20 +496,31 @@ class MyBikeTrafficUploader(
         }
 
         pendingAutoUploadAfterRide = true
-        scope.launch {
+        if (isNetworkConnected()) {
+            scheduleDelayedAutoUpload()
+        } else {
             updateStatus(
                 UploadPhase.WAITING_FOR_WIFI,
-                "Ride finished — waiting a few seconds for Karoo to save .FIT file..."
+                "Ride saved! Waiting for Wi-Fi (then 45s for Strava sync) to auto-upload..."
             )
-            delay(6_000L)
+        }
+    }
 
-            if (isNetworkConnected()) {
-                uploadLatestFitFile(isAutoTrigger = true)
-            } else {
+    private fun scheduleDelayedAutoUpload() {
+        if (autoUploadInFlight) return
+        autoUploadInFlight = true
+        scope.launch {
+            try {
                 updateStatus(
                     UploadPhase.WAITING_FOR_WIFI,
-                    "Ride saved! Waiting for Wi-Fi connection to auto-upload to MyBikeTraffic.com..."
+                    "Wi-Fi connected — waiting 45s for Karoo -> Strava sync before uploading to MyBikeTraffic.com..."
                 )
+                delay(AUTO_UPLOAD_STRAVA_SYNC_DELAY_MS)
+                if (pendingAutoUploadAfterRide && isNetworkConnected()) {
+                    uploadLatestFitFile(isAutoTrigger = true)
+                }
+            } finally {
+                autoUploadInFlight = false
             }
         }
     }
@@ -573,7 +589,7 @@ class MyBikeTrafficUploader(
     /**
      * Runs an offscreen WebView on the main thread that loads https://www.mybiketraffic.com/rides/import,
      * automatically checks the Terms of Service checkbox, attaches the .FIT file to the "Choose Files"
-     * input, and waits for the page's upload to complete.
+     * input, and waits for the page's upload and any post-upload redirect/Strava sync to complete.
      */
     @SuppressLint("SetJavaScriptEnabled")
     private suspend fun performWebViewUpload(fitFile: File): Pair<UploadPhase, String>? {
@@ -666,7 +682,6 @@ class MyBikeTrafficUploader(
                                 }
                             }
                         } else if (injectionDone && !currentUrl.contains("/rides/import")) {
-                            // Page navigated away from /rides/import after form submission (e.g. to /rides/<id>)
                             val timestamp = SimpleDateFormat("MMM d, HH:mm", Locale.US).format(Date())
                             resultDeferred.complete(
                                 Pair(
@@ -684,7 +699,11 @@ class MyBikeTrafficUploader(
                     resultDeferred.await()
                 }
 
-                // If the page didn't fire an XHR error or redirect within 10s after attaching, check page text
+                // Allow 4s after upload completion for any follow-up redirect / Strava sync requests on the page
+                if (outcome?.first == UploadPhase.SUCCESS) {
+                    delay(4_000L)
+                }
+
                 val finalOutcome = outcome ?: run {
                     if (injectionDone) {
                         val timestamp = SimpleDateFormat("MMM d, HH:mm", Locale.US).format(Date())
@@ -698,6 +717,7 @@ class MyBikeTrafficUploader(
                 }
 
                 runCatching {
+                    cookieManager.flush()
                     webView.stopLoading()
                     webView.destroy()
                 }
@@ -871,8 +891,8 @@ class MyBikeTrafficUploader(
             cm.registerNetworkCallback(request, object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
                     if (pendingAutoUploadAfterRide && preferences.getSettings().autoUploadEnabled) {
-                        Timber.i("Network became available with pending ride upload; triggering auto-upload")
-                        uploadLatestFitFile(isAutoTrigger = true)
+                        Timber.i("Network became available with pending ride upload; scheduling 45s delayed upload for Strava sync")
+                        scheduleDelayedAutoUpload()
                     }
                 }
             })
