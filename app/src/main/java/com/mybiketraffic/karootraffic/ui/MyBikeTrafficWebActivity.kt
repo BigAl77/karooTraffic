@@ -27,7 +27,8 @@ import com.mybiketraffic.karootraffic.upload.MyBikeTrafficUploader
 
 /**
  * In-app browser for signing into https://www.mybiketraffic.com once (persisting session cookies
- * for automatic post-ride background uploads) and providing 1-tap .FIT file attachment.
+ * for automatic post-ride background uploads) and providing 1-tap .FIT file attachment with
+ * automatic Terms of Service checkbox checking.
  */
 class MyBikeTrafficWebActivity : AppCompatActivity() {
 
@@ -80,7 +81,7 @@ class MyBikeTrafficWebActivity : AppCompatActivity() {
         )
 
         statusBanner = TextView(this).apply {
-            text = "Sign in below once — KarooTraffic saves your session for automatic post-ride Wi-Fi uploads."
+            text = "Sign in below once — Terms of Service checkbox will be checked automatically."
             setTextColor(Color.parseColor("#A7F3D0"))
             setBackgroundColor(Color.parseColor("#172030"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
@@ -122,11 +123,15 @@ class MyBikeTrafficWebActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
                 cookieManager.flush()
                 manager.uploader.refreshStatus()
+
+                // Automatically check the Terms of Service checkbox as soon as the page loads
+                view?.evaluateJavascript(MyBikeTrafficUploader.buildAutoCheckTermsJs(), null)
+
                 val latestFit = manager.uploader.findLatestFitFile()
                 statusBanner.text = if (latestFit != null) {
-                    "Session saved. Latest ride ready: ${latestFit.name} (tap 'Choose File' or 'Attach Latest .FIT')"
+                    "Terms checkbox checked. Latest ride ready: ${latestFit.name} (tap 'Choose Files' or 'Attach Latest .FIT')"
                 } else {
-                    "Session saved. URL: ${url ?: MyBikeTrafficUploader.IMPORT_URL}"
+                    "Terms checkbox checked. Session saved for: ${url ?: MyBikeTrafficUploader.IMPORT_URL}"
                 }
             }
         }
@@ -138,6 +143,9 @@ class MyBikeTrafficWebActivity : AppCompatActivity() {
                 filePathCallback: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?
             ): Boolean {
+                // Ensure the Terms of Service checkbox is checked before returning the file to the page
+                webView?.evaluateJavascript(MyBikeTrafficUploader.buildAutoCheckTermsJs(), null)
+
                 val latestFit = manager.uploader.findLatestFitFile()
                 if (latestFit != null) {
                     Toast.makeText(
@@ -173,8 +181,8 @@ class MyBikeTrafficWebActivity : AppCompatActivity() {
     }
 
     /**
-     * Injects the newest local .FIT file directly into the page's <input type="file"> via JS DataTransfer
-     * and submits the form if present.
+     * Automatically checks the Terms of Service checkbox and attaches the newest local .FIT file
+     * into the page's "Choose Files" <input type="file">.
      */
     private fun injectLatestFitFileIntoPage() {
         val latestFit = manager.uploader.findLatestFitFile()
@@ -187,39 +195,11 @@ class MyBikeTrafficWebActivity : AppCompatActivity() {
             val bytes = latestFit.readBytes()
             val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
             val safeName = latestFit.name.replace("'", "")
-            val js = """
-                (function() {
-                    var fileInput = document.querySelector('input[type="file"]');
-                    if (!fileInput) {
-                        return 'NO_FILE_INPUT';
-                    }
-                    var bstr = atob('$b64');
-                    var n = bstr.length;
-                    var u8arr = new Uint8Array(n);
-                    while (n--) {
-                        u8arr[n] = bstr.charCodeAt(n);
-                    }
-                    var file = new File([u8arr], '$safeName', {type: 'application/octet-stream'});
-                    var dt = new DataTransfer();
-                    dt.items.add(file);
-                    fileInput.files = dt.files;
-                    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-                    if (fileInput.form) {
-                        var submitBtn = fileInput.form.querySelector('button[type="submit"], input[type="submit"]');
-                        if (submitBtn) {
-                            submitBtn.click();
-                        } else {
-                            fileInput.form.submit();
-                        }
-                        return 'SUBMITTED:' + '$safeName';
-                    }
-                    return 'ATTACHED:' + '$safeName';
-                })();
-            """.trimIndent()
+            val js = MyBikeTrafficUploader.buildCheckTermsAndAttachFitJs(b64, safeName)
 
             webView.evaluateJavascript(js) { result ->
-                statusBanner.text = "Attached ${latestFit.name} ($result)"
-                Toast.makeText(this, "Attached ${latestFit.name}", Toast.LENGTH_SHORT).show()
+                statusBanner.text = "Checked Terms & attached ${latestFit.name} ($result)"
+                Toast.makeText(this, "Checked Terms & attached ${latestFit.name}", Toast.LENGTH_SHORT).show()
             }
         }.onFailure { e ->
             Toast.makeText(this, "Error reading .FIT: ${e.message}", Toast.LENGTH_SHORT).show()

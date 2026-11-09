@@ -35,7 +35,7 @@
 ## 1. Installing KarooTraffic on Your Karoo 2 / Karoo 3
 
 ### Option A: Wireless Sideload via Hammerhead Companion App (Karoo 3 / Latest Karoo 2 Firmware)
-1. Download `karooTraffic-debug.apk` from the [latest GitHub Release](https://github.com/BigAl77/karooTraffic/releases) (or build it from `app/build/outputs/apk/debug/karooTraffic-debug.apk`) onto your phone.
+1. Download [`releases/karooTraffic-debug.apk`](releases/karooTraffic-debug.apk) (or from the [latest GitHub Release](https://github.com/BigAl77/karooTraffic/releases)) onto your phone.
 2. Share the `.apk` file to the **Hammerhead Companion App** on your phone to install it wirelessly onto your Karoo.
 
 ### Option B: Install via USB-C (`adb`)
